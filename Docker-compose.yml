@@ -1,0 +1,81 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: crm_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: crm_universitario
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5433:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/00_init.sql
+    networks:
+      - crm-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d crm_universitario"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build:
+      context: ./crm-backend/app
+      dockerfile: Dockerfile
+    container_name: crm_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8000
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: crm_universitario
+      DB_USERNAME: user
+      DB_PASSWORD: password
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./crm-backend/app:/var/www/html
+    networks:
+      - crm-network
+
+  frontend:
+    build:
+      # El contexto apunta a la carpeta crm-frontend donde está el Dockerfile y los archivos del proyecto
+      context: ./crm-frontend
+      # El Dockerfile está directamente en esa carpeta
+      dockerfile: Dockerfile
+    container_name: crm_frontend
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "3000:3000"
+    networks:
+      - crm-network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pg_admin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "admin@crm-universitario.com"
+      PGADMIN_DEFAULT_PASSWORD: "admin"
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
+    networks:
+      - crm-network
+
+volumes:
+  db-data:
+
+networks:
+  crm-network:
